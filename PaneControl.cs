@@ -2,6 +2,21 @@
 
 namespace EasyFolder;
 
+internal sealed class TabStrip : TabControl
+{
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTTRANSPARENT = -1;
+    private const int HTCLIENT = 1;
+
+    // Tab control gốc coi khoảng trống cạnh các tab là "trong suốt" nên chuột bấm vào đó
+    // rơi xuống cửa sổ cha. Nhận lại để bắt được bấm đúp mở tab mới.
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg == WM_NCHITTEST && (int)(long)m.Result == HTTRANSPARENT) m.Result = (IntPtr)HTCLIENT;
+    }
+}
+
 /// <summary>Một khung: thanh điều hướng + ô địa chỉ + các tab thư mục.</summary>
 internal sealed class PaneControl : UserControl
 {
@@ -14,7 +29,17 @@ internal sealed class PaneControl : UserControl
 
     private readonly TableLayoutPanel bar = new() { Dock = DockStyle.Top, RowCount = 1 };
     private readonly TextBox address = new() { Anchor = AnchorStyles.Left | AnchorStyles.Right };
-    private readonly TabControl tabs = new() { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed, ShowToolTips = true };
+    private static readonly (string Name, uint Mode)[] ViewModes =
+    {
+        ("Chi tiết", Native.FVM_DETAILS),
+        ("Danh sách", Native.FVM_LIST),
+        ("Biểu tượng", Native.FVM_ICON),
+        ("Biểu tượng nhỏ", Native.FVM_SMALLICON),
+        ("Ô xếp", Native.FVM_TILE),
+        ("Nội dung", Native.FVM_CONTENT),
+    };
+
+    private readonly TabStrip tabs = new() { Dock = DockStyle.Fill, DrawMode = TabDrawMode.OwnerDrawFixed, ShowToolTips = true };
     private readonly ContextMenuStrip tabMenu = new();
     private readonly Font glyphFont = new("Segoe MDL2 Assets", 10f);
     private readonly Font closeFont = new("Segoe UI", 7f);
@@ -117,11 +142,10 @@ internal sealed class PaneControl : UserControl
     private void BuildBar()
     {
         bar.Height = S(32);
-        bar.ColumnCount = 7;
+        bar.ColumnCount = 10;
         for (int i = 0; i < 4; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        for (int i = 0; i < 5; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var tips = new ToolTip();
@@ -153,8 +177,23 @@ internal sealed class PaneControl : UserControl
         address.KeyDown += AddressKeyDown;
         bar.Controls.Add(address, 4, 0);
 
-        bar.Controls.Add(Glyph("", "Thêm thư mục này vào Yêu thích", RequestAddFavorite), 5, 0);
-        bar.Controls.Add(Glyph("", "Tab mới (Ctrl+T)", () => NewTab()), 6, 0);
+        var viewMenu = new ContextMenuStrip();
+        foreach (var (name, mode) in ViewModes)
+            viewMenu.Items.Add(name, null, (_, _) => ActiveView?.SetViewMode(mode));
+        viewMenu.Opening += (_, _) =>
+        {
+            uint? current = ActiveView?.GetViewMode();
+            for (int i = 0; i < ViewModes.Length; i++)
+                ((ToolStripMenuItem)viewMenu.Items[i]).Checked = ViewModes[i].Mode == current;
+        };
+        Button? viewButton = null;
+        viewButton = Glyph("", "Kiểu hiển thị", () => viewMenu.Show(viewButton!, new Point(0, viewButton!.Height)));
+        bar.Controls.Add(viewButton, 5, 0);
+
+        bar.Controls.Add(Glyph("", "Thư mục mới", () => ActiveView?.CreateNew(true)), 6, 0);
+        bar.Controls.Add(Glyph("", "File văn bản mới (.txt)", () => ActiveView?.CreateNew(false)), 7, 0);
+        bar.Controls.Add(Glyph("", "Thêm thư mục này vào Yêu thích", RequestAddFavorite), 8, 0);
+        bar.Controls.Add(Glyph("", "Tab mới (Ctrl+T)", () => NewTab()), 9, 0);
     }
 
     private void BuildTabMenu()
@@ -283,8 +322,8 @@ internal sealed class PaneControl : UserControl
         if (tabs.ItemSize != size) tabs.ItemSize = size;
     }
 
-    // SysTabControl32 không phát sự kiện bấm đúp nên tự nhận biết hai lần bấm liên tiếp
-    // vào khoảng trống bên phải các tab.
+    // Tự nhận biết hai lần bấm liên tiếp vào khoảng trống bên phải các tab (lần bấm thứ hai
+    // có thể tới dưới dạng bấm thường hoặc bấm đúp tuỳ lớp cửa sổ, cả hai đều qua MouseDown).
     private void TabsMouseDown(object? sender, MouseEventArgs e)
     {
         bool onEmptyStrip = e.Button == MouseButtons.Left && tabs.TabCount > 0

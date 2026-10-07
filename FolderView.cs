@@ -35,6 +35,8 @@ internal sealed class FolderView : UserControl
 {
     private const int RetryIntervalMs = 3000;
     private const int ExistsTimeoutMs = 4000;
+    private const int RenameAttempts = 12;
+    private const int RenameRetryMs = 150;
 
     private readonly BrowserHost host = new() { Dock = DockStyle.Fill };
     private readonly Panel waitPanel = new() { Dock = DockStyle.Fill, Visible = false, BackColor = SystemColors.Window };
@@ -163,6 +165,67 @@ internal sealed class FolderView : UserControl
     {
         if (IsDisposed || IsWaiting) return;
         GetShellView()?.UIActivate(Native.SVUIA_ACTIVATE_FOCUS);
+    }
+
+    private IFolderView? GetFolderView()
+    {
+        if (browser == null || IsWaiting) return null;
+        Guid iid = Native.IID_IFolderView;
+        return browser.GetCurrentView(ref iid, out object? view) == 0 ? view as IFolderView : null;
+    }
+
+    public uint? GetViewMode() =>
+        GetFolderView() is { } fv && fv.GetCurrentViewMode(out uint mode) == 0 ? mode : null;
+
+    public void SetViewMode(uint mode) => GetFolderView()?.SetCurrentViewMode(mode);
+
+    /// <summary>Tạo thư mục hoặc file .txt mới trong thư mục đang xem rồi đưa nó vào chế độ đổi tên.</summary>
+    public async void CreateNew(bool folder)
+    {
+        if (IsWaiting || browser == null || IsShellPath(TargetPath))
+        {
+            MessageBox.Show(FindForm(), "Không tạo được ở vị trí này.", "Easy Folder", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        string dir = TargetPath;
+        string created;
+        try
+        {
+            created = UniquePath(dir, folder ? "New folder" : "New Text Document", folder ? "" : ".txt");
+            if (folder) Directory.CreateDirectory(created);
+            else using (new FileStream(created, FileMode.CreateNew)) { }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(FindForm(), $"Không tạo được:\n{ex.Message}", "Easy Folder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        // Danh sách file cập nhật không đồng bộ sau khi tạo; thử vài lần tới khi item xuất hiện.
+        FocusView();
+        for (int attempt = 0; attempt < RenameAttempts; attempt++)
+        {
+            await Task.Delay(RenameRetryMs);
+            if (IsDisposed || TargetPath != dir) return;
+            if (SelectForRename(created)) return;
+        }
+    }
+
+    private static string UniquePath(string dir, string name, string extension)
+    {
+        string path = Path.Combine(dir, name + extension);
+        for (int n = 2; Directory.Exists(path) || File.Exists(path); n++)
+            path = Path.Combine(dir, $"{name} ({n}){extension}");
+        return path;
+    }
+
+    private bool SelectForRename(string path)
+    {
+        if (GetShellView() is not { } view) return false;
+        if (Native.SHParseDisplayName(path, IntPtr.Zero, out IntPtr pidl, 0, out _) != 0) return false;
+        try { return view.SelectItem(Native.ILFindLastID(pidl), Native.SVSI_SELECT_AND_RENAME) == 0; }
+        finally { Native.ILFree(pidl); }
     }
 
     public bool ContainsHwnd(IntPtr hwnd) =>

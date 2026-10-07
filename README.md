@@ -20,6 +20,7 @@ Easy Folder xử lý khác:
 - Tự lưu liên tục: bố cục, các tab, tab đang chọn, vị trí vách ngăn, vị trí và kích thước cửa sổ.
 - Phiên có tên: lưu nhiều bộ thư mục (ví dụ theo dự án) và chuyển qua lại từ menu **Phiên**.
 - Yêu thích: đánh dấu thư mục hay dùng, mở nhanh từ menu (giữ Ctrl để mở trong tab mới).
+- Nút trên mỗi khung: đổi kiểu hiển thị (chi tiết, danh sách, biểu tượng, ô xếp, nội dung), tạo thư mục mới, tạo file văn bản mới; item vừa tạo vào ngay chế độ đổi tên.
 - Ô địa chỉ có gợi ý; dán đường dẫn tới một file sẽ mở thư mục chứa file đó.
 - Tuỳ chọn khởi động cùng Windows.
 

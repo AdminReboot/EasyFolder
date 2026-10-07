@@ -24,7 +24,14 @@ internal static class Native
     public const uint SIGDN_NORMALDISPLAY = 0x00000000;
     public const uint SIGDN_DESKTOPABSOLUTEPARSING = 0x80028000;
 
+    public const uint FVM_ICON = 1;
+    public const uint FVM_SMALLICON = 2;
+    public const uint FVM_LIST = 3;
     public const uint FVM_DETAILS = 4;
+    public const uint FVM_TILE = 6;
+    public const uint FVM_CONTENT = 8;
+    // SVSI_EDIT | SVSI_DESELECTOTHERS | SVSI_ENSUREVISIBLE | SVSI_FOCUSED
+    public const uint SVSI_SELECT_AND_RENAME = 0x3 | 0x4 | 0x8 | 0x10;
     public const uint FWF_AUTOARRANGE = 0x00000001;
     public const uint FWF_NOWEBVIEW = 0x00010000;
     public const uint EBO_NOBORDER = 0x00000040;
@@ -32,6 +39,7 @@ internal static class Native
 
     public static readonly Guid CLSID_ExplorerBrowser = new("71f96385-ddd6-48d3-a0c1-ae06e8b055fb");
     public static readonly Guid IID_IShellView = new("000214E3-0000-0000-C000-000000000046");
+    public static readonly Guid IID_IFolderView = new("cde725b0-ccc9-4519-917e-325d72fab4ce");
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
@@ -71,6 +79,10 @@ internal static class Native
 
     [DllImport("shell32.dll")]
     public static extern void ILFree(IntPtr pidl);
+
+    /// <summary>Trỏ tới phần tử cuối (tên item) bên trong pidl; không cấp phát, đừng giải phóng riêng.</summary>
+    [DllImport("shell32.dll")]
+    public static extern IntPtr ILFindLastID(IntPtr pidl);
 
     [DllImport("user32.dll")]
     public static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
@@ -129,7 +141,7 @@ internal interface IInputObject
     [PreserveSig] int TranslateAcceleratorIO(ref Native.MSG pMsg);
 }
 
-// Chỉ khai báo tới Refresh; các hàm phía sau trong vtable không dùng tới.
+// Khai báo tới SelectItem. Các hàm "Unused" chỉ để giữ đúng thứ tự vtable, không được gọi.
 [ComImport, Guid("000214E3-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IShellView
 {
@@ -139,4 +151,18 @@ internal interface IShellView
     [PreserveSig] int EnableModeless(int fEnable);
     [PreserveSig] int UIActivate(uint uState);
     [PreserveSig] int Refresh();
+    [PreserveSig] int UnusedCreateViewWindow();
+    [PreserveSig] int UnusedDestroyViewWindow();
+    [PreserveSig] int UnusedGetCurrentInfo();
+    [PreserveSig] int UnusedAddPropertySheetPages();
+    [PreserveSig] int UnusedSaveViewState();
+    [PreserveSig] int SelectItem(IntPtr pidlItem, uint uFlags);
+}
+
+// Chỉ khai báo hai hàm đầu; các hàm phía sau trong vtable không dùng tới.
+[ComImport, Guid("cde725b0-ccc9-4519-917e-325d72fab4ce"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IFolderView
+{
+    [PreserveSig] int GetCurrentViewMode(out uint pViewMode);
+    [PreserveSig] int SetCurrentViewMode(uint viewMode);
 }
