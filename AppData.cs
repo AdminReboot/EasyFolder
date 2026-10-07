@@ -69,18 +69,15 @@ internal static class Store
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static string Dir { get; } = ResolveDir();
+    // Chế độ portable: có data.json nằm cạnh file exe thì dùng luôn thư mục đó.
+    public static bool IsPortable { get; } = File.Exists(Path.Combine(AppContext.BaseDirectory, "data.json"));
+
+    public static string Dir { get; } = IsPortable
+        ? AppContext.BaseDirectory
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EasyFolder");
     public static string DataFile => Path.Combine(Dir, "data.json");
     private static string BackupFile => DataFile + ".bak";
     private static string BackupDir => Path.Combine(Dir, "backups");
-
-    // Chế độ portable: nếu có data.json nằm cạnh file exe thì dùng luôn thư mục đó.
-    private static string ResolveDir()
-    {
-        string exeDir = AppContext.BaseDirectory;
-        if (File.Exists(Path.Combine(exeDir, "data.json"))) return exeDir;
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EasyFolder");
-    }
 
     public static AppData Load(out string? warning)
     {

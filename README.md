@@ -27,7 +27,8 @@ Easy Folder xử lý khác:
 
 | Phím | Chức năng |
 | --- | --- |
-| Ctrl+T | Tab mới (cùng thư mục đang xem) |
+| Ctrl+T, bấm đúp khoảng trống cạnh các tab | Tab mới (cùng thư mục đang xem) |
+| Bấm đúp ô đường dẫn | Chọn toàn bộ đường dẫn |
 | Ctrl+W, chuột giữa lên tab | Đóng tab |
 | Ctrl+Tab / Ctrl+Shift+Tab | Chuyển tab |
 | Alt+← / Alt+→, nút bên hông chuột | Quay lại / tiến tới |
@@ -69,7 +70,7 @@ Phát hành bản mới: tăng `<Version>` trong `EasyFolder.csproj`, commit, pu
 
 Mặc định: `%APPDATA%\EasyFolder\data.json` (kèm `data.json.bak` và thư mục `backups`).
 
-Chế độ portable: đặt một file `data.json` cạnh `EasyFolder.exe`, chương trình sẽ dùng thư mục đó thay cho `%APPDATA%`.
+Chế độ portable: đặt một file `data.json` cạnh `EasyFolder.exe`, chương trình sẽ dùng thư mục đó thay cho `%APPDATA%`. Bản portable có dữ liệu riêng nên chạy song song được với bản thường.
 
 ## Cấu trúc mã nguồn
 

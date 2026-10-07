@@ -142,6 +142,7 @@ internal sealed class MainForm : Form, IMessageFilter
             }
 
             data.SkippedVersion = null;
+            SaveNow();
             Updater.StartNewVersion();
             Close();
         }

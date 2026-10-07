@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace EasyFolder;
 
@@ -11,8 +13,12 @@ internal static class Program
     {
         if (args.Contains("--update")) return Updater.RunHeadless();
 
-        // Chỉ cho chạy một bản: hai bản cùng ghi một file dữ liệu sẽ ghi đè lên nhau.
-        using var mutex = new Mutex(true, "EasyFolder_SingleInstance", out bool isFirst);
+        // Chỉ cho chạy một bản trên mỗi file dữ liệu: hai bản cùng ghi một file sẽ ghi đè lên nhau.
+        // Bản portable có dữ liệu riêng nên được chạy song song với bản thường.
+        string mutexName = Store.IsPortable
+            ? "EasyFolder_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Store.Dir.ToLowerInvariant())))[..16]
+            : "EasyFolder_SingleInstance";
+        using var mutex = new Mutex(true, mutexName, out bool isFirst);
         if (!isFirst)
         {
             // Vừa cập nhật xong: bản cũ đang thoát, chờ nó nhả mutex rồi chạy tiếp.

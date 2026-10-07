@@ -5,7 +5,10 @@ namespace EasyFolder;
 /// <summary>Một khung: thanh điều hướng + ô địa chỉ + các tab thư mục.</summary>
 internal sealed class PaneControl : UserControl
 {
-    private const int MaxTabTitle = 28;
+    // Bề rộng tab (px ở 100%): rộng tối đa khi còn chỗ, co dần khi nhiều tab như trình duyệt.
+    private const int MaxTabWidth = 240;
+    private const int MinTabWidth = 80;
+    private const int StripSpare = 48;
     private static readonly Color ActiveBar = Color.FromArgb(204, 228, 247);
     private static readonly Color ActiveAccent = Color.FromArgb(255, 140, 0);
 
@@ -16,6 +19,8 @@ internal sealed class PaneControl : UserControl
     private readonly Font glyphFont = new("Segoe MDL2 Assets", 10f);
     private readonly Font closeFont = new("Segoe UI", 7f);
     private bool active;
+    private long lastStripClickTick;
+    private Point lastStripClickPoint;
 
     public event EventHandler? StateChanged;
     public event Action<string, string>? AddFavoriteRequested;
@@ -25,13 +30,13 @@ internal sealed class PaneControl : UserControl
         BuildBar();
         BuildTabMenu();
 
-        tabs.Padding = new Point(S(14), S(4));
+        tabs.SizeMode = TabSizeMode.Fixed;
         tabs.DrawItem += DrawTab;
         tabs.MouseUp += TabsMouseUp;
-        tabs.MouseDoubleClick += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left && TabIndexAt(e.Location) < 0) NewTab();
-        };
+        tabs.MouseDown += TabsMouseDown;
+        tabs.Resize += (_, _) => UpdateTabWidth();
+        // Bấm đúp mặc định chỉ chọn một từ; ở đây cần cả đường dẫn để sao chép.
+        address.MouseDoubleClick += (_, _) => BeginInvoke(address.SelectAll);
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (IsHandleCreated) BeginInvoke(LoadActive);
@@ -183,6 +188,7 @@ internal sealed class PaneControl : UserControl
         ApplyTitle(page, view);
         view.Changed += (_, _) => ViewChanged(page, view);
         tabs.TabPages.Add(page);
+        UpdateTabWidth();
         if (select)
         {
             tabs.SelectedTab = page;
@@ -203,6 +209,7 @@ internal sealed class PaneControl : UserControl
         if (index == tabs.SelectedIndex) tabs.SelectedIndex = index > 0 ? index - 1 : 1;
         tabs.TabPages.Remove(page);
         page.Dispose();
+        UpdateTabWidth();
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -214,6 +221,7 @@ internal sealed class PaneControl : UserControl
             tabs.TabPages.Remove(page);
             page.Dispose();
         }
+        UpdateTabWidth();
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -228,8 +236,7 @@ internal sealed class PaneControl : UserControl
 
     private static void ApplyTitle(TabPage page, FolderView view)
     {
-        string title = view.Title.Length > MaxTabTitle ? view.Title[..(MaxTabTitle - 1)] + "…" : view.Title;
-        if (page.Text != title) page.Text = title;
+        if (page.Text != view.Title) page.Text = view.Title;
         page.ToolTipText = view.TargetPath;
     }
 
@@ -264,6 +271,45 @@ internal sealed class PaneControl : UserControl
         // Dán đường dẫn tới một file thì mở thư mục chứa nó.
         if (File.Exists(text)) text = Path.GetDirectoryName(text) ?? text;
         v.Navigate(text, true);
+    }
+
+    private void UpdateTabWidth()
+    {
+        if (tabs.TabCount == 0) return;
+        // Luôn chừa một khoảng trống cuối dải tab để bấm đúp mở tab mới.
+        int available = tabs.ClientSize.Width - S(StripSpare);
+        int width = Math.Clamp(available / tabs.TabCount, S(MinTabWidth), S(MaxTabWidth));
+        var size = new Size(width, S(26));
+        if (tabs.ItemSize != size) tabs.ItemSize = size;
+    }
+
+    // SysTabControl32 không phát sự kiện bấm đúp nên tự nhận biết hai lần bấm liên tiếp
+    // vào khoảng trống bên phải các tab.
+    private void TabsMouseDown(object? sender, MouseEventArgs e)
+    {
+        bool onEmptyStrip = e.Button == MouseButtons.Left && tabs.TabCount > 0
+                            && e.Y <= tabs.GetTabRect(0).Bottom && TabIndexAt(e.Location) < 0;
+        if (!onEmptyStrip)
+        {
+            lastStripClickTick = 0;
+            return;
+        }
+
+        long now = Environment.TickCount64;
+        Size slop = SystemInformation.DoubleClickSize;
+        bool isDouble = now - lastStripClickTick <= SystemInformation.DoubleClickTime
+                        && Math.Abs(e.X - lastStripClickPoint.X) <= slop.Width
+                        && Math.Abs(e.Y - lastStripClickPoint.Y) <= slop.Height;
+        if (isDouble)
+        {
+            lastStripClickTick = 0;
+            NewTab();
+        }
+        else
+        {
+            lastStripClickTick = now;
+            lastStripClickPoint = e.Location;
+        }
     }
 
     private int TabIndexAt(Point p)
