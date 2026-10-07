@@ -49,6 +49,8 @@ internal sealed class AppData
     public string? CurrentSession { get; set; }
     public Dictionary<string, LayoutState> Sessions { get; set; } = new();
     public List<Favorite> Favorites { get; set; } = new();
+    public bool CheckUpdates { get; set; } = true;
+    public string? SkippedVersion { get; set; }
 }
 
 /// <summary>

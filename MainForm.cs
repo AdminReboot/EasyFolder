@@ -34,6 +34,7 @@ internal sealed class MainForm : Form, IMessageFilter
     private PaneControl? activePane;
     private bool ready;
     private bool applyingSplits;
+    private bool checkingUpdate;
 
     public MainForm()
     {
@@ -78,6 +79,76 @@ internal sealed class MainForm : Form, IMessageFilter
         ApplySplits();
         if (loadWarning != null)
             MessageBox.Show(this, loadWarning, "Easy Folder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        if (data.CheckUpdates) _ = CheckForUpdateAsync(true);
+    }
+
+    // ---------- Cập nhật ----------
+
+    /// <param name="silent">Kiểm tra tự động lúc mở: không báo gì nếu không có bản mới hoặc lỗi mạng.</param>
+    private async Task CheckForUpdateAsync(bool silent)
+    {
+        if (checkingUpdate) return;
+        checkingUpdate = true;
+        try
+        {
+            if (silent) await Task.Delay(3000);
+
+            Updater.Release? release;
+            try
+            {
+                release = await Updater.CheckAsync();
+            }
+            catch (Exception ex)
+            {
+                if (!silent)
+                    MessageBox.Show(this, $"Không kiểm tra được bản cập nhật:\n{ex.Message}", "Cập nhật", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (IsDisposed) return;
+
+            if (release == null)
+            {
+                if (!silent)
+                    MessageBox.Show(this, $"Bạn đang dùng bản mới nhất ({Updater.Current}).", "Cập nhật", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (silent && release.Tag == data.SkippedVersion) return;
+
+            string notes = release.Notes.Length > 600 ? release.Notes[..600] + "…" : release.Notes;
+            var answer = MessageBox.Show(this,
+                $"Đã có bản {release.Version} (bạn đang dùng {Updater.Current}).\n\n{notes}\n\n" +
+                "Cập nhật ngay? Chương trình sẽ tự khởi động lại và mở lại đúng các thư mục đang mở.",
+                "Cập nhật Easy Folder", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes)
+            {
+                // Không hỏi lại bản này mỗi lần mở máy; vẫn cập nhật được từ menu Trợ giúp.
+                data.SkippedVersion = release.Tag;
+                MarkDirty();
+                return;
+            }
+
+            try
+            {
+                UseWaitCursor = true;
+                await Updater.ApplyAsync(release);
+            }
+            catch (Exception ex)
+            {
+                UseWaitCursor = false;
+                if (MessageBox.Show(this, $"Cập nhật thất bại:\n{ex.Message}\n\nMở trang tải về để cập nhật thủ công?", "Cập nhật",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                    Process.Start(new ProcessStartInfo(Updater.ReleasesPage) { UseShellExecute = true });
+                return;
+            }
+
+            data.SkippedVersion = null;
+            Updater.StartNewVersion();
+            Close();
+        }
+        finally
+        {
+            checkingUpdate = false;
+        }
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -373,11 +444,20 @@ internal sealed class MainForm : Form, IMessageFilter
             miStartup.Checked = IsStartupEnabled();
         };
         miOptions.DropDownItems.Add(miStartup);
+        var miAutoUpdate = new ToolStripMenuItem("Tự kiểm tra bản cập nhật khi mở") { Checked = data.CheckUpdates, CheckOnClick = true };
+        miAutoUpdate.Click += (_, _) =>
+        {
+            data.CheckUpdates = miAutoUpdate.Checked;
+            MarkDirty();
+        };
+        miOptions.DropDownItems.Add(miAutoUpdate);
         miOptions.DropDownItems.Add(Item("Mở thư mục dữ liệu", null, () =>
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Store.Dir}\"") { UseShellExecute = true })));
 
         var miHelp = new ToolStripMenuItem("Trợ &giúp");
         miHelp.DropDownItems.Add(Item("Phím tắt", null, ShowHelp));
+        miHelp.DropDownItems.Add(Item("Kiểm tra cập nhật…", null, () => _ = CheckForUpdateAsync(false)));
+        miHelp.DropDownItems.Add(new ToolStripMenuItem($"Phiên bản {Updater.Current}") { Enabled = false });
 
         menu.Items.AddRange(new ToolStripItem[] { miSession, miLayout, miFavorites, miTab, miOptions, miHelp });
     }

@@ -4,19 +4,35 @@ namespace EasyFolder;
 
 internal static class Program
 {
+    private const int AfterUpdateWaitMs = 15000;
+
     [STAThread]
-    private static void Main()
+    private static int Main(string[] args)
     {
+        if (args.Contains("--update")) return Updater.RunHeadless();
+
         // Chỉ cho chạy một bản: hai bản cùng ghi một file dữ liệu sẽ ghi đè lên nhau.
         using var mutex = new Mutex(true, "EasyFolder_SingleInstance", out bool isFirst);
         if (!isFirst)
         {
-            ActivateRunningInstance();
-            return;
+            // Vừa cập nhật xong: bản cũ đang thoát, chờ nó nhả mutex rồi chạy tiếp.
+            if (!args.Contains(Updater.AfterUpdateArg) || !WaitForPreviousInstance(mutex))
+            {
+                ActivateRunningInstance();
+                return 0;
+            }
         }
 
+        Updater.CleanupOldFiles();
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
+        return 0;
+    }
+
+    private static bool WaitForPreviousInstance(Mutex mutex)
+    {
+        try { return mutex.WaitOne(AfterUpdateWaitMs); }
+        catch (AbandonedMutexException) { return true; }
     }
 
     private static void ActivateRunningInstance()

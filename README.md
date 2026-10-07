@@ -45,13 +45,25 @@ Easy Folder xử lý khác:
 
 Cần Windows 10/11 và [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
 
+Tải `EasyFolder.exe` ở trang [Releases](https://github.com/AdminReboot/EasyFolder/releases/latest), đặt vào một thư mục bất kỳ có quyền ghi rồi chạy. Chỉ có một file, không cần cài đặt.
+
+## Tự cập nhật
+
+- Mỗi lần mở, chương trình hỏi GitHub xem có bản phát hành mới hơn không. Nếu có, nó hỏi bạn; đồng ý thì nó tải file mới, thay file đang chạy và tự khởi động lại, mở lại đúng các thư mục đang mở.
+- Từ chối một bản thì bản đó không được hỏi lại lúc mở; vẫn cập nhật được bằng **Trợ giúp → Kiểm tra cập nhật…**
+- Tắt kiểm tra tự động ở **Tuỳ chọn → Tự kiểm tra bản cập nhật khi mở**.
+- Cập nhật không cần giao diện: `EasyFolder.exe --update` (mã thoát 0 = đã cập nhật, 1 = không có bản mới, 2 = lỗi).
+- File tải về được đối chiếu kích thước và mã SHA-256 do GitHub công bố trước khi thay.
+
+## Tự build
+
 ```bash
 git clone https://github.com/AdminReboot/EasyFolder.git
 cd EasyFolder
-dotnet publish -c Release -o publish
+dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 ```
 
-Chạy `publish\EasyFolder.exe`.
+Phát hành bản mới: tăng `<Version>` trong `EasyFolder.csproj`, commit, push rồi chạy `tools\release.ps1`.
 
 ## Dữ liệu lưu ở đâu
 
@@ -67,6 +79,7 @@ Chế độ portable: đặt một file `data.json` cạnh `EasyFolder.exe`, ch�
 | `PaneControl.cs` | Một khung: thanh điều hướng, ô địa chỉ, các tab |
 | `FolderView.cs` | Một tab: khung Explorer nhúng và cơ chế chờ/thử lại |
 | `AppData.cs` | Mô hình dữ liệu, đọc/ghi và sao lưu |
+| `Updater.cs` | Kiểm tra và cài bản mới từ GitHub Releases |
 | `Native.cs` | Khai báo Win32/COM (`IExplorerBrowser`) |
 
 ## Giấy phép
