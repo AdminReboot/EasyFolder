@@ -44,6 +44,7 @@ internal sealed class PaneControl : UserControl
     private readonly Font glyphFont = new("Segoe MDL2 Assets", 10f);
     private readonly Font closeFont = new("Segoe UI", 7f);
     private bool active;
+    private bool updatingTabWidth;
     private long lastStripClickTick;
     private Point lastStripClickPoint;
 
@@ -314,12 +315,22 @@ internal sealed class PaneControl : UserControl
 
     private void UpdateTabWidth()
     {
-        if (tabs.TabCount == 0) return;
-        // Luôn chừa một khoảng trống cuối dải tab để bấm đúp mở tab mới.
-        int available = tabs.ClientSize.Width - S(StripSpare);
-        int width = Math.Clamp(available / tabs.TabCount, S(MinTabWidth), S(MaxTabWidth));
-        var size = new Size(width, S(26));
-        if (tabs.ItemSize != size) tabs.ItemSize = size;
+        // Gán ItemSize làm TabControl tự đổi kích thước qua lại (rộng thêm 1px rồi trả về) để vẽ lại,
+        // tức là lại phát Resize và gọi vào đây. Không chặn thì hai bên gọi nhau vô hạn tới khi sập.
+        if (updatingTabWidth || tabs.TabCount == 0) return;
+        updatingTabWidth = true;
+        try
+        {
+            // Luôn chừa một khoảng trống cuối dải tab để bấm đúp mở tab mới.
+            int available = tabs.ClientSize.Width - S(StripSpare);
+            int width = Math.Clamp(available / tabs.TabCount, S(MinTabWidth), S(MaxTabWidth));
+            var size = new Size(width, S(26));
+            if (tabs.ItemSize != size) tabs.ItemSize = size;
+        }
+        finally
+        {
+            updatingTabWidth = false;
+        }
     }
 
     // Tự nhận biết hai lần bấm liên tiếp vào khoảng trống bên phải các tab (lần bấm thứ hai
